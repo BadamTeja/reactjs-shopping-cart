@@ -1,9 +1,7 @@
 pipeline {
     agent any
 
-
     environment {
-        DOCKER_IMAGE = "yourdockerhub/react-shopping-cart"
         CONTAINER_NAME = "react-cart-container"
         PORT = "3000"
     }
@@ -12,7 +10,14 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                checkout scmGit(branches: [[name: '*/master']], extensions: [], userRemoteConfigs: [[credentialsId: 'Git-Creds', url: 'https://github.com/BadamTeja/reactjs-shopping-cart.git']])
+                checkout scmGit(
+                    branches: [[name: '*/master']],
+                    extensions: [],
+                    userRemoteConfigs: [[
+                        credentialsId: 'Git-Creds',
+                        url: 'https://github.com/BadamTeja/reactjs-shopping-cart.git'
+                    ]]
+                )
             }
         }
 
@@ -34,58 +39,57 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
-            steps {
-                sh "docker build -t ${DOCKER_IMAGE}:${BUILD_NUMBER} ."
-            }
-        }
-
-        stage('Docker Login') {
+        stage('Docker Build & Push') {
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'docker-creds',
                     usernameVariable: 'DOCKER_USER',
                     passwordVariable: 'DOCKER_PASS'
                 )]) {
+
                     sh '''
                     echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin
+
+                    docker build -t $DOCKER_USER/react-shopping-cart:${BUILD_NUMBER} .
+
+                    docker push $DOCKER_USER/react-shopping-cart:${BUILD_NUMBER}
                     '''
                 }
-            }
-        }
-
-        stage('Push Image to DockerHub') {
-            steps {
-                sh "docker push ${DOCKER_IMAGE}:${BUILD_NUMBER}"
             }
         }
 
         stage('Remove Old Container') {
             steps {
                 sh '''
-                docker stop ${CONTAINER_NAME} || true
-                docker rm ${CONTAINER_NAME} || true
+                docker stop react-cart-container || true
+                docker rm react-cart-container || true
                 '''
             }
         }
 
         stage('Run New Container') {
             steps {
-                sh """
-                docker run -d -p ${PORT}:80 \
-                --name ${CONTAINER_NAME} \
-                ${DOCKER_IMAGE}:${BUILD_NUMBER}
-                """
+                withCredentials([usernamePassword(
+                    credentialsId: 'docker-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+
+                    sh '''
+                    docker run -d -p 3000:80 \
+                    --name react-cart-container \
+                    $DOCKER_USER/react-shopping-cart:${BUILD_NUMBER}
+                    '''
+                }
             }
         }
 
         stage('Cleanup Old Images') {
             steps {
-                sh """
-                docker images ${DOCKER_IMAGE} --format "{{.Repository}}:{{.Tag}}" | grep -v ${BUILD_NUMBER} | xargs -r docker rmi || true
-                """
+                sh '''
+                docker image prune -f
+                '''
             }
         }
-
     }
 }
