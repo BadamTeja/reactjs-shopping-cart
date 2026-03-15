@@ -22,7 +22,7 @@ pipeline {
             }
         }
 
-        stage('Test') {
+        stage('Tests') {
             steps {
                 sh 'npm test -- --watchAll=false || true'
             }
