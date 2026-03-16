@@ -5,6 +5,9 @@ pipeline {
         CONTAINER_NAME = "react-cart-container"
         PORT = "3000"
     }
+    tools {
+    nodejs "node20"
+}
 
     stages {
 
